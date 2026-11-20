@@ -30,6 +30,8 @@ TEST_PATTERNS = [
     re.compile(r"\bctest\b"),
     re.compile(r"chown\s+(-R\s+)?tester\b"),
     re.compile(r"\bpytest\b"),
+    # Inspecting test results ("grep FAIL $(find -name '*.log')") needs the tests to have run.
+    re.compile(r"^grep .*\$\(find -name ", re.M),
 ]
 
 

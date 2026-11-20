@@ -273,6 +273,11 @@ compose_build_dir() {
         fi
         # The book starts a fresh login shell here; our runner already has a clean one.
         sed -i '/^exec \/usr\/bin\/bash --login$/d' "$dst"
+        # Without the test suites there are no test results to inspect, and a
+        # grep that finds nothing returns 1 (e.g. glibc's "grep Timed out $(find ...)").
+        if [ "$KEEP_TESTS" != 1 ]; then
+            sed -i -E '/^grep .*\$\(find -name /d' "$dst"
+        fi
     done < "$WORK/cmds/manifest.tsv"
 
     {
