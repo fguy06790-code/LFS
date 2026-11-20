@@ -32,6 +32,7 @@ TEST_PATTERNS = [
     re.compile(r"\bpytest\b"),
     # Inspecting test results ("grep FAIL $(find -name '*.log')") needs the tests to have run.
     re.compile(r"^grep .*\$\(find -name ", re.M),
+    re.compile(r"check-log\b"),
 ]
 
 
@@ -144,6 +145,8 @@ def main():
         if ch < 5 or ch > 10:
             continue
         blocks = [(t, r) for t, r in s["blocks"] if keep_tests or not is_test_block(t)]
+        # Example commands in notes end in a literal "..." (e.g. "ABI=32 ./configure ...").
+        blocks = [(t, r) for t, r in blocks if not re.search(r" \.\.\.\s*$", t.strip())]
         if not blocks:
             continue
         n += 1

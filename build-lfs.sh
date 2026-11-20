@@ -276,8 +276,11 @@ compose_build_dir() {
         # Without the test suites there are no test results to inspect, and a
         # grep that finds nothing returns 1 (e.g. glibc's "grep Timed out $(find ...)").
         if [ "$KEEP_TESTS" != 1 ]; then
-            sed -i -E '/^grep .*\$\(find -name /d' "$dst"
+            sed -i -E '/^grep .*\$\(find -name /d; /check-log\b/d' "$dst"
         fi
+        # Example commands in the book's notes end in a literal "..." (like GMP's
+        # "ABI=32 ./configure ..." for 32-bit hosts); they are not meant to run.
+        sed -i -E '/^[^#].* \.\.\.[[:space:]]*$/d' "$dst"
     done < "$WORK/cmds/manifest.tsv"
 
     {
