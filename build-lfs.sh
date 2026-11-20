@@ -117,6 +117,7 @@ MD5_URL=$BOOK_BASE/view/$LFS_VERSION/md5sums
 FALLBACK_MIRROR=${FALLBACK_MIRROR:-https://ftp.osuosl.org/pub/lfs/lfs-packages/$LFS_VERSION}
 
 BUILD=$WORK/build                    # composed scripts, copied into the image
+ROOT_HASH=$WORK/.root-password-hash  # hashed root password, until chapter 8 uses it
 IN_IMAGE_BUILD=/sources/lfs-build    # the same directory, seen from the chroot
 
 # ---- State --------------------------------------------------------------------------
@@ -128,7 +129,7 @@ in_list()   { [[ "$2" == *" $1 "* ]]; }
 host_problems() {
     local p=() c
     for c in bash ld bison gcc g++ make patch perl python3 sed tar makeinfo xz gzip \
-             m4 gawk find diff wget git sfdisk losetup mkfs.ext4 blkid; do
+             m4 gawk find diff wget git sfdisk losetup mkfs.ext4 blkid openssl xz; do
         command -v "$c" >/dev/null 2>&1 || p+=("missing command: $c")
     done
     [[ "$(readlink -f /bin/sh)" == */bash ]] || p+=("/bin/sh is not bash (LFS requires it)")
@@ -153,7 +154,7 @@ fix_host() {
     export DEBIAN_FRONTEND=noninteractive
     apt-get update -qq
     apt-get install -y -qq build-essential bison gawk m4 texinfo python3 wget git \
-        xz-utils patch perl fdisk e2fsprogs >/dev/null
+        xz-utils patch perl fdisk e2fsprogs openssl >/dev/null
     ln -sf bash /bin/sh
     update-alternatives --set awk /usr/bin/gawk >/dev/null 2>&1 || true
     if ! yacc --version 2>/dev/null | head -1 | grep -qi bison; then
@@ -177,14 +178,21 @@ phase_preflight() {
     fi
     info "host OK: $(uname -r), $JOBS parallel jobs, work dir $WORK"
 
-    if ! is_done phase-system && [ -z "${LFS_ROOT_PASSWORD:-}" ]; then
-        [ -t 0 ] || die "set LFS_ROOT_PASSWORD, or run in a terminal so the script can ask for it"
-        local a b
-        read -rsp "    Root password for the new LFS system: " a; echo
-        read -rsp "    Repeat it: " b; echo
+    # The new system's root password is asked once and kept only as a SHA-512
+    # crypt hash in a root-only file, so a resumed build doesn't ask again.
+    # The file is deleted once chapter 8 has set the password.
+    if ! is_done phase-system && [ ! -s "$ROOT_HASH" ]; then
+        local a=${LFS_ROOT_PASSWORD:-} b
+        if [ -z "$a" ]; then
+            [ -t 0 ] || die "set LFS_ROOT_PASSWORD, or run in a terminal so the script can ask for it"
+            read -rsp "    Root password for the new LFS system: " a; echo
+            read -rsp "    Repeat it: " b; echo
+            [ "$a" = "$b" ] || die "the passwords don't match"
+        fi
         [ -n "$a" ] || die "the root password can't be empty"
-        [ "$a" = "$b" ] || die "the passwords don't match"
-        LFS_ROOT_PASSWORD=$a
+        (umask 077; printf '%s' "$a" | openssl passwd -6 -stdin > "$ROOT_HASH")
+        [ -s "$ROOT_HASH" ] || die "could not hash the root password (is openssl installed?)"
+        info "root password saved as a hash for this build"
     fi
 }
 
@@ -237,7 +245,7 @@ edit_section() {
             sed -i "s|<paper_size>|$PAPER|" "$f"
             ! grep -q '<paper_size>' "$f" || die "could not fill in the paper size in $f" ;;
         ch-system-shadow)
-            sed -i "s|^passwd root\$|chpasswd < $IN_IMAGE_BUILD/.rootpw \&\& rm -f $IN_IMAGE_BUILD/.rootpw|" "$f"
+            sed -i "s|^passwd root\$|chpasswd -e < $IN_IMAGE_BUILD/.rootpw \&\& rm -f $IN_IMAGE_BUILD/.rootpw|" "$f"
             grep -q chpasswd "$f" || die "could not replace 'passwd root' in $f" ;;
     esac
 }
@@ -480,11 +488,11 @@ phase_chroot()    { log "Chapter 7: chroot and more temporary tools"; run_chapte
 
 phase_system() {
     log "Chapter 8: the final system"
-    if [ -n "${LFS_ROOT_PASSWORD:-}" ]; then
-        (umask 077; printf 'root:%s\n' "$LFS_ROOT_PASSWORD" > "$LFS$IN_IMAGE_BUILD/.rootpw")
+    if [ -s "$ROOT_HASH" ]; then
+        (umask 077; printf 'root:%s\n' "$(cat "$ROOT_HASH")" > "$LFS$IN_IMAGE_BUILD/.rootpw")
     fi
     run_chapter 8 chroot
-    rm -f "$LFS$IN_IMAGE_BUILD/.rootpw"
+    rm -f "$LFS$IN_IMAGE_BUILD/.rootpw" "$ROOT_HASH"
 }
 
 phase_config() { log "Chapter 9: system configuration"; run_chapter 9 chroot; }
