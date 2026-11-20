@@ -1,0 +1,34 @@
+# Copy to lfs.conf (next to build-lfs.sh) and change what you need.
+# Every setting is optional; these are the defaults.
+
+LFS_VERSION=12.4                 # LFS book version (SysVinit edition)
+WORK=/root/lfs-work              # downloads, logs, progress, and the image
+IMAGE=/root/lfs-work/lfs.img     # the disk image to build
+IMAGE_SIZE=40G                   # sparse file; uses about 25 GB when done
+LFS=/mnt/lfs                     # where the image is mounted during the build
+# JOBS=8                         # parallel make jobs (default: all CPUs)
+
+# The Windows program support package, installed at the end
+PKG_REPO=https://github.com/fguy06790-code/lfs-pe-inspect.git
+PKG_REF=main
+
+# The new system
+TIMEZONE=UTC                     # e.g. America/New_York
+PAPER=letter                     # letter or A4 (groff)
+LFS_LANG=en_US.UTF-8
+HOST_NAME=lfs
+
+# Network (defaults match QEMU user-mode networking)
+NET_IP=10.0.2.15
+NET_PREFIX=24
+NET_GATEWAY=10.0.2.2
+NET_BROADCAST=10.0.2.255
+NET_DNS=10.0.2.3
+
+# Extras
+WITH_NODE=0                      # 1 = build Node.js so pe-inspect runs (adds ~1 hour)
+NODE_VERSION=22.18.0
+KEEP_TESTS=0                     # 1 = run the book's test suites (roughly doubles the time)
+VERBOSE=0                        # 1 = show build output instead of only writing logs
+
+# LFS_ROOT_PASSWORD can be set in the environment to skip the password prompt.
