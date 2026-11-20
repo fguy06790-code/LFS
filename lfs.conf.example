@@ -2,9 +2,10 @@
 # Every setting is optional; these are the defaults.
 
 LFS_VERSION=12.4                 # LFS book version (SysVinit edition)
+DESKTOP=plasma                   # plasma (KDE Plasma from BLFS) or none (console only)
 WORK=/root/lfs-work              # downloads, logs, progress, and the image
 IMAGE=/root/lfs-work/lfs.img     # the disk image to build
-IMAGE_SIZE=40G                   # sparse file; uses about 25 GB when done
+IMAGE_SIZE=120G                  # sparse file; default 120G with a desktop, 40G without
 LFS=/mnt/lfs                     # where the image is mounted during the build
 # JOBS=8                         # parallel make jobs (default: all CPUs)
 

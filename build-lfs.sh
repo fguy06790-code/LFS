@@ -81,10 +81,11 @@ if [ -n "$STOP_AFTER" ] && [[ " ${PHASES[*]} " != *" $STOP_AFTER "* ]]; then
 fi
 
 LFS_VERSION=${LFS_VERSION:-12.4}
+DESKTOP=${DESKTOP:-plasma}           # plasma, or none for a console-only system
 WORK=${WORK:-/root/lfs-work}
 LFS=${LFS:-/mnt/lfs}
 IMAGE=${IMAGE:-$WORK/lfs.img}
-IMAGE_SIZE=${IMAGE_SIZE:-40G}
+if [ "$DESKTOP" = none ]; then IMAGE_SIZE=${IMAGE_SIZE:-40G}; else IMAGE_SIZE=${IMAGE_SIZE:-120G}; fi
 JOBS=${JOBS:-$(nproc)}
 PKG_REPO=${PKG_REPO:-https://github.com/fguy06790-code/lfs-pe-inspect.git}
 PKG_REF=${PKG_REF:-main}
@@ -132,8 +133,10 @@ host_problems() {
     fi
     [ -e /dev/loop-control ] || p+=("no loop device support (/dev/loop-control missing)")
     local avail
+    local need=35
+    [ "$DESKTOP" = none ] || need=110
     avail=$(df --output=avail -BG "$(dirname "$IMAGE")" | tail -1 | tr -dc 0-9)
-    [ "${avail:-0}" -ge 35 ] || p+=("less than 35 GB free for the image (${avail:-0} GB)")
+    [ "${avail:-0}" -ge "$need" ] || p+=("less than $need GB free for the image (${avail:-0} GB)")
     if [ ${#p[@]} -gt 0 ]; then printf '%s\n' "${p[@]}"; fi
 }
 
@@ -262,7 +265,7 @@ compose_build_dir() {
             "$LFS_VERSION" "$TIMEZONE" "$LFS_LANG" "$HOST_NAME"
         printf 'NET_IP=%q\nNET_PREFIX=%q\nNET_GATEWAY=%q\nNET_BROADCAST=%q\nNET_DNS=%q\n' \
             "$NET_IP" "$NET_PREFIX" "$NET_GATEWAY" "$NET_BROADCAST" "$NET_DNS"
-        printf 'WITH_NODE=%q\nNODE_VERSION=%q\n' "$WITH_NODE" "$NODE_VERSION"
+        printf 'WITH_NODE=%q\nNODE_VERSION=%q\nDESKTOP=%q\n' "$WITH_NODE" "$NODE_VERSION" "$DESKTOP"
     } > "$BUILD/config.env"
 }
 

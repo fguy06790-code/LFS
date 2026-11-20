@@ -23,6 +23,18 @@ scripts/config \
     -e HYPERV_KEYBOARD -e HID_HYPERV_MOUSE \
     -e SERIAL_8250 -e SERIAL_8250_CONSOLE \
     -e IKCONFIG -e IKCONFIG_PROC
+
+# Desktop (KDE Plasma): VM graphics, input, sound, and what elogind,
+# PipeWire, and Flatpak-style sandboxes (bubblewrap) expect from the kernel.
+if [ "${DESKTOP:-none}" != none ]; then
+    scripts/config \
+        -e DRM_VIRTIO_GPU -e DRM_BOCHS -e DRM_QXL -e DRM_VMWGFX -e DRM_HYPERV \
+        -e INPUT_EVDEV -e INPUT_UINPUT -e USB_HID -e HID_GENERIC \
+        -e USB_XHCI_HCD -e USB_EHCI_HCD \
+        -e SOUND -e SND -e SND_HDA_INTEL -e SND_HDA_GENERIC \
+        -e CGROUPS -e INOTIFY_USER -e TMPFS_POSIX_ACL -e FUSE_FS \
+        -e USER_NS -e SECCOMP -e SECCOMP_FILTER
+fi
 make olddefconfig
 
 # Check the options that matter for booting and for pe-loader really ended up on.
