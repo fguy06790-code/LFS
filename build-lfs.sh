@@ -114,7 +114,7 @@ BOOK_BASE=https://www.linuxfromscratch.org/lfs
 BOOK_URL=$BOOK_BASE/downloads/$LFS_VERSION/LFS-BOOK-$LFS_VERSION-NOCHUNKS.html
 LIST_URL=$BOOK_BASE/view/$LFS_VERSION/wget-list-sysv
 MD5_URL=$BOOK_BASE/view/$LFS_VERSION/md5sums
-FALLBACK_MIRROR=${FALLBACK_MIRROR:-https://ftp.osuosl.org/pub/lfs/lfs-packages/$LFS_VERSION}
+LFS_MIRROR=${LFS_MIRROR:-https://ftp.osuosl.org/pub/lfs/lfs-packages/$LFS_VERSION}
 
 BUILD=$WORK/build                    # composed scripts, copied into the image
 ROOT_HASH=$WORK/.root-password-hash  # hashed root password, until chapter 8 uses it
@@ -383,19 +383,25 @@ phase_sources() {
     log "Downloading LFS $LFS_VERSION sources into $LFS/sources"
     mkdir -p "$LFS/sources"
     chmod a+wt "$LFS/sources"
-    wget --continue --no-verbose --tries=3 --input-file="$WORK/book/wget-list-sysv" \
-        --directory-prefix="$LFS/sources" 2>&1 | grep -iE 'error|failed' | sed 's/^/    /' || true
-    local url name missing=0
+    # The LFS mirror has every file in one place; the book's original sites are
+    # the fallback. Timeouts keep a dead server from stalling the build.
+    local url name missing=0 total done_n=0
+    local get=(wget --continue --no-verbose --timeout=30 --tries=2 --waitretry=5)
+    total=$(grep -c . "$WORK/book/wget-list-sysv")
     while read -r url; do
         [ -n "$url" ] || continue
         name=${url##*/}
-        if [ ! -s "$LFS/sources/$name" ]; then
-            info "retrying $name from the LFS mirror"
-            wget --continue --no-verbose -O "$LFS/sources/$name" "$FALLBACK_MIRROR/$name" \
-                || { info "could not download $name"; missing=1; }
+        done_n=$((done_n + 1))
+        if (cd "$LFS/sources" && grep " $name\$" "$WORK/book/md5sums" | md5sum -c --quiet >/dev/null 2>&1); then
+            continue    # already downloaded and correct
         fi
+        info "[$done_n/$total] $name"
+        rm -f "$LFS/sources/$name"
+        "${get[@]}" -O "$LFS/sources/$name" "$LFS_MIRROR/$name" 2>/dev/null \
+            || "${get[@]}" -O "$LFS/sources/$name" "$url" 2>/dev/null \
+            || { info "could not download $name from the mirror or $url"; rm -f "$LFS/sources/$name"; missing=1; }
     done < "$WORK/book/wget-list-sysv"
-    [ "$missing" = 0 ] || die "some sources could not be downloaded"
+    [ "$missing" = 0 ] || die "some sources could not be downloaded (rerun to retry)"
 
     log "Checking MD5 sums"
     (cd "$LFS/sources" && md5sum -c --quiet "$WORK/book/md5sums") || die "MD5 check failed (see above)"
