@@ -305,7 +305,7 @@ ensure_disk() {
     PART_DEV=$(partition_dev "$LOOP_DEV")
     mkdir -p "$LFS"
     if ! mountpoint -q "$LFS"; then
-        mount "$PART_DEV" "$LFS"
+        mount -o noatime "$PART_DEV" "$LFS"
         ATTACHED=1
     fi
     {
