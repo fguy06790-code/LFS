@@ -25,6 +25,13 @@ replaced, and each replacement is a readable file in [`overrides/`](overrides).
 7. **Installs Windows program support**: `pe-loader`, `pe-inspect`, and a boot
    script that registers `.exe` files with the kernel (`binfmt_misc`), so
    `./program.exe` runs directly.
+8. **Builds KDE Plasma** (with `DESKTOP=plasma`, the default) from the
+   [BLFS](https://www.linuxfromscratch.org/blfs/) book: about 100 book sections,
+   including Mesa, LLVM, Qt 6, Wayland, PipeWire, KDE Frameworks 6, Plasma 6, and
+   the SDDM login screen. `tools/blfs-book.py` follows each package's required
+   dependencies to work out the order. Downloads happen on the host; in the
+   chroot, a `wget` stand-in copies them from a cache, so the book's commands
+   run unchanged. This adds many hours. Set `DESKTOP=none` for a console system.
 
 ## Usage
 
@@ -87,8 +94,12 @@ pe-loader program.exe    # or simply ./program.exe
 | `build-lfs.sh` | the build script |
 | `tools/extract-book.py` | pulls each section's commands out of the book |
 | `tools/run-section.sh` | unpacks a package, runs one section, cleans up |
+| `tools/blfs-book.py` | plans the BLFS desktop build: order, downloads, commands |
+| `tools/run-blfs-section.sh` | runs one BLFS section in the chroot |
 | `overrides/` | replacements for interactive or placeholder sections |
+| `overrides/blfs-append/` | additions to BLFS sections for this build's choices |
 | `stages/extras.sh` | installs lfs-pe-inspect and release files |
+| `stages/desktop-env.sh` | Xorg and KDE prefixes (`/usr`) for the desktop build |
 | `lfs.conf.example` | settings |
 
 ## License

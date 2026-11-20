@@ -25,11 +25,12 @@
 #   config     chapter 9: boot scripts and system configuration
 #   boot       chapter 10: fstab, kernel, and GRUB
 #   extras     pe-loader, pe-inspect, binfmt_misc boot script, release files
+#   desktop    KDE Plasma and the SDDM login screen from BLFS (DESKTOP=plasma)
 #   finish     unmount and print how to boot the image
 set -euo pipefail
 
 SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
-PHASES=(preflight package book disk sources layout cross temptools chroot system config boot extras finish)
+PHASES=(preflight package book disk sources layout cross temptools chroot system config boot extras desktop finish)
 
 # Sections the script handles itself, or that are only examples in the book.
 SKIP_SECTIONS=" ch-tools-kernfs ch-tools-chroot ch-system-pkgmgt ch-config-symlinks "
@@ -102,6 +103,12 @@ WITH_NODE=${WITH_NODE:-0}
 NODE_VERSION=${NODE_VERSION:-22.18.0}
 KEEP_TESTS=${KEEP_TESTS:-0}
 VERBOSE=${VERBOSE:-0}
+
+# BLFS desktop build: the targets, plus recommended packages a usable desktop
+# needs (LLVM gives Mesa its software renderer for VMs without a real GPU).
+BLFS_TARGETS=${BLFS_TARGETS:-"plasma-build sddm"}
+BLFS_WITH=${BLFS_WITH:-postlfs-config-profile,make-ca,linux-pam,elogind,polkit,llvm,libinput,breeze-icons,xwayland}
+BLFS_URL=https://www.linuxfromscratch.org/blfs/downloads/$LFS_VERSION/BLFS-BOOK-$LFS_VERSION-nochunks.html.xz
 
 BOOK_BASE=https://www.linuxfromscratch.org/lfs
 BOOK_URL=$BOOK_BASE/downloads/$LFS_VERSION/LFS-BOOK-$LFS_VERSION-NOCHUNKS.html
@@ -343,6 +350,9 @@ mount_vfs() {
 
 umount_vfs() {
     local m
+    if findmnt -n "$LFS/etc/resolv.conf" >/dev/null 2>&1; then
+        umount "$LFS/etc/resolv.conf"
+    fi
     for m in dev/shm dev/pts sys proc run dev; do
         mountpoint -q "$LFS/$m" 2>/dev/null && umount "$LFS/$m"
     done
@@ -489,6 +499,122 @@ phase_extras() {
     info "done (log: $WORK/logs/extras.log)"
 }
 
+# ---- Desktop: KDE Plasma from BLFS ------------------------------------------------------
+BLFS_IN=/sources/blfs                 # seen from the chroot
+
+blfs_plan() {
+    log "Planning the KDE Plasma build from the BLFS $LFS_VERSION book"
+    [ -s "$WORK/book/blfs.html" ] || {
+        wget -q -O "$WORK/book/blfs.html.xz" "$BLFS_URL"
+        xz -df "$WORK/book/blfs.html.xz"
+    }
+    local args=(--with "$BLFS_WITH" --lang "$LFS_LANG")
+    [ "$KEEP_TESTS" = 1 ] && args+=(--keep-tests)
+    rm -rf "$WORK/blfs-plan"
+    # shellcheck disable=SC2086
+    python3 "$SCRIPT_DIR/tools/blfs-book.py" "$WORK/book/blfs.html" "$WORK/blfs-plan" \
+        $BLFS_TARGETS "${args[@]}" 2>&1 | sed 's/^/    /'
+
+    # Edits for this build's choices (Xorg in /usr, boot to the login screen).
+    local f
+    for f in "$SCRIPT_DIR"/overrides/blfs-append/*.sh; do
+        local id; id=$(basename "$f" .sh)
+        local target; target=$(ls "$WORK/blfs-plan"/[0-9][0-9][0-9]-"$id".sh 2>/dev/null | head -1)
+        [ -n "$target" ] || die "overrides/blfs-append/$id.sh: section $id is not in the plan"
+        cat "$f" >> "$target"
+    done
+    f=$(ls "$WORK/blfs-plan"/[0-9][0-9][0-9]-sddm.sh)
+    sed -i '/ServerPath.*opt\/xorg/d' "$f"     # the book assumes Xorg in /opt/xorg
+
+    local B=$LFS$BLFS_IN
+    mkdir -p "$B/cache"
+    rm -rf "$B/plan"
+    cp -a "$WORK/blfs-plan" "$B/plan"
+    cp "$SCRIPT_DIR/tools/run-blfs-section.sh" "$SCRIPT_DIR/stages/desktop-env.sh" "$B/"
+}
+
+blfs_fetch() {
+    log "Downloading BLFS sources (on the host; the chroot has no network tools)"
+    local B=$LFS$BLFS_IN num id url md5 title cache name
+    while IFS=$'\t' read -r num id url md5 title; do
+        is_done "blfs-fetch-$num" && continue
+        cache=$B/cache/$id
+        mkdir -p "$cache"
+        if [ "$url" != "-" ]; then
+            name=${url##*/}
+            wget --continue --no-verbose --tries=3 -O "$cache/$name" "$url" 2>&1 | grep -iE 'error|failed' | sed 's/^/    /' || true
+            [ -s "$cache/$name" ] || die "could not download $url (section $id)"
+            if [ "$md5" != "-" ]; then
+                echo "$md5  $cache/$name" | md5sum -c --quiet || die "MD5 mismatch for $name (section $id)"
+            fi
+        fi
+        if [ -f "$WORK/blfs-plan/$num-$id.extra" ]; then
+            while read -r url; do
+                [ -n "$url" ] || continue
+                wget --continue --no-verbose -O "$cache/${url##*/}" "$url" || die "could not download $url (section $id)"
+            done < "$WORK/blfs-plan/$num-$id.extra"
+        fi
+        if [ -f "$WORK/blfs-plan/$num-$id.fetch" ]; then
+            # Bulk pages (Xorg, KF6, Plasma): run the book's own download commands.
+            local dl=$WORK/blfs-dl/$id
+            rm -rf "$dl"; mkdir -p "$dl"
+            info "running the book's download steps for $id"
+            (cd "$dl" && bash -e "$WORK/blfs-plan/$num-$id.fetch") > "$WORK/logs/blfs-fetch-$id.log" 2>&1 \
+                || { tail -20 "$WORK/logs/blfs-fetch-$id.log"; die "download steps for $id failed"; }
+            find "$dl" -type f -exec cp -f {} "$cache/" \;
+        fi
+        mark_done "blfs-fetch-$num"
+    done < "$WORK/blfs-plan/plan.tsv"
+
+    if ! is_done blfs-bootscripts; then
+        local bs
+        bs=$(grep -oE 'https?://[^"]*blfs-bootscripts-[0-9]+\.tar\.xz' "$WORK/book/blfs.html" | head -1)
+        [ -n "$bs" ] || die "could not find the blfs-bootscripts URL in the BLFS book"
+        wget -q -O "$WORK/book/${bs##*/}" "$bs"
+        rm -rf "$B/bootscripts"; mkdir -p "$B/bootscripts"
+        tar -xf "$WORK/book/${bs##*/}" -C "$B/bootscripts" --strip-components=1
+        mark_done blfs-bootscripts
+    fi
+}
+
+phase_desktop() {
+    if [ "$DESKTOP" = none ]; then
+        info "DESKTOP=none: no desktop to build"
+        return
+    fi
+    blfs_plan
+    blfs_fetch
+    mount_vfs
+    # Some builds (Rust crates, Python wheels) download at build time; borrow
+    # the host's DNS settings for the duration.
+    findmnt -n "$LFS/etc/resolv.conf" >/dev/null 2>&1 || mount --bind /etc/resolv.conf "$LFS/etc/resolv.conf"
+
+    local chroot_env=(env -i HOME=/root TERM="${TERM:-linux}" PATH=/usr/bin:/usr/sbin
+                      MAKEFLAGS="-j$JOBS" NINJAJOBS="$JOBS" BLFS_DIR="$BLFS_IN")
+    if ! is_done blfs-env; then
+        chroot "$LFS" "${chroot_env[@]}" /bin/bash -e "$BLFS_IN/desktop-env.sh" < /dev/null
+        mark_done blfs-env
+    fi
+
+    log "Building KDE Plasma ($(wc -l < "$WORK/blfs-plan/plan.tsv") BLFS sections)"
+    local num id url md5 title logf t0
+    while IFS=$'\t' read -r num id url md5 title; do
+        is_done "blfs-$num" && continue
+        logf=$WORK/logs/blfs-$num-$id.log
+        printf '    [%s] %-55s ' "$num" "$title"
+        t0=$(date +%s)
+        if ! chroot "$LFS" "${chroot_env[@]}" /bin/bash "$BLFS_IN/run-blfs-section.sh" "$num" \
+                < /dev/null > "$logf" 2>&1; then
+            echo "FAILED"
+            tail -40 "$logf" | sed 's/^/      | /'
+            die "BLFS section $num ($title) failed. Full log: $logf. Fix the cause and rerun to continue from here."
+        fi
+        printf '%5ss\n' "$(( $(date +%s) - t0 ))"
+        mark_done "blfs-$num"
+    done < "$WORK/blfs-plan/plan.tsv"
+    umount "$LFS/etc/resolv.conf"
+}
+
 phase_finish() {
     log "LFS $LFS_VERSION is built: $IMAGE"
     cat <<EOF
@@ -502,10 +628,21 @@ phase_finish() {
     Log in as root with the password you chose. Windows console programs run with:
       pe-loader program.exe        or, after boot, simply  ./program.exe
 EOF
+    if [ "$DESKTOP" != none ]; then
+        cat <<EOF
+
+    KDE Plasma: the login screen (SDDM) does not allow root. Before your first
+    graphical login, press Ctrl+Alt+F2, log in as root, and create your user:
+      useradd -m -G audio,video,input,users yourname
+      passwd yourname
+    Then press Ctrl+Alt+F7 (or reboot) and choose "Plasma (Wayland)".
+    In QEMU, add a display for the desktop:  -device virtio-vga -display gtk
+EOF
+    fi
 }
 
 # ---- Main -----------------------------------------------------------------------------
-NEEDS_DISK=" sources layout cross temptools chroot system config boot extras "
+NEEDS_DISK=" sources layout cross temptools chroot system config boot extras desktop "
 
 for phase in "${PHASES[@]}"; do
     if [ "$phase" = preflight ]; then
