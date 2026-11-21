@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=LFS Setup
+GenericName=System Configuration
+Comment=Hostname, timezone, language, keyboard, network, users, services, install to disk
+Exec=sudo /usr/sbin/lfs-setup
+Terminal=true
+Icon=preferences-system
+Categories=System;Settings;
+Keywords=settings;configuration;install;users;network;timezone;

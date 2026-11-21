@@ -1,0 +1,42 @@
+.TH LFS-SETUP 8 "2026" "lfs-setup 1.0" "System Administration"
+.SH NAME
+lfs-setup \- configure a Linux From Scratch system from a menu
+.SH SYNOPSIS
+.B lfs-setup
+.br
+.B lfs-setup \-\-status
+.SH DESCRIPTION
+.B lfs-setup
+shows the system's settings in one menu, in the style of Arch Linux's
+archinstall. Choosing a setting lets you change it; changed settings are
+marked with
+.B *
+and nothing is written until you choose
+.BR "Apply changes" .
+.PP
+Settings: hostname, timezone, language (locale), console and desktop keyboard
+layouts, network (DHCP or a static address), DNS server, root password, users
+(administrators join the
+.I wheel
+group for sudo), whether the computer starts into the KDE Plasma login screen
+or a text console, automatic login, which services start at boot, and Windows
+program support (pe-loader).
+.PP
+.B Install to disk
+copies the running system (for example the live ISO) to a disk, which is
+erased first, and installs GRUB so the disk boots on its own.
+.SH OPTIONS
+.TP
+.B \-\-status
+Print the current settings and exit.
+.SH FILES
+/etc/hostname, /etc/hosts, /etc/localtime, /etc/profile.d/i18n.sh,
+/etc/sysconfig/console, /etc/X11/xorg.conf.d/00-keyboard.conf,
+/etc/sysconfig/ifconfig.*, /etc/resolv.conf, /etc/inittab,
+/etc/sddm.conf.d/10-lfs-setup-autologin.conf, /etc/rc.d/rc?.d
+.SH NOTES
+Disabled services keep their boot links, renamed from
+.I S##name
+to
+.IR _S##name ,
+so enabling them again restores the original order.

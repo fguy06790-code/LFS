@@ -26,11 +26,12 @@
 #   boot       chapter 10: fstab, kernel, and GRUB
 #   extras     pe-loader, pe-inspect, binfmt_misc boot script, release files
 #   desktop    KDE Plasma and the SDDM login screen from BLFS (DESKTOP=plasma)
+#   setup      lfs-setup, the system configuration menu (compiled last)
 #   finish     unmount and print how to boot the image
 set -euo pipefail
 
 SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
-PHASES=(preflight package book disk sources layout cross temptools chroot system config boot extras desktop finish)
+PHASES=(preflight package book disk sources layout cross temptools chroot system config boot extras desktop setup finish)
 
 # Sections the script handles itself, or that are only examples in the book.
 SKIP_SECTIONS=" ch-tools-kernfs ch-tools-chroot ch-system-pkgmgt ch-config-symlinks "
@@ -673,6 +674,19 @@ phase_desktop() {
     umount "$LFS/etc/resolv.conf"
 }
 
+# ---- lfs-setup: the configuration menu, compiled last ------------------------------------
+phase_setup() {
+    log "Compiling lfs-setup (system configuration menu)"
+    rm -rf "$LFS/sources/lfs-setup"
+    cp -a "$SCRIPT_DIR/lfs-setup" "$LFS/sources/lfs-setup"
+    mount_vfs
+    chroot "$LFS" /usr/bin/env -i HOME=/root TERM="${TERM:-linux}" PATH=/usr/bin:/usr/sbin \
+        /bin/bash -e -c 'cd /sources/lfs-setup && make clean && make && make install PREFIX=/usr && lfs-setup --version' \
+        < /dev/null > "$WORK/logs/setup.log" 2>&1 \
+        || { tail -40 "$WORK/logs/setup.log"; die "lfs-setup failed to build; log: $WORK/logs/setup.log"; }
+    info "$(tail -1 "$WORK/logs/setup.log") installed as /usr/sbin/lfs-setup"
+}
+
 phase_finish() {
     log "LFS $LFS_VERSION is built: $IMAGE"
     cat <<EOF
@@ -683,24 +697,24 @@ phase_finish() {
     Or convert it for Hyper-V (Generation 1 VM, IDE disk):
       qemu-img convert -O vhdx $IMAGE lfs.vhdx
 
-    Log in as root with the password you chose. Windows console programs run with:
+    Log in as root with the password you chose, then run  lfs-setup  to set the
+    timezone, language, keyboard and network and to create your user account.
+    Windows console programs run with:
       pe-loader program.exe        or, after boot, simply  ./program.exe
 EOF
     if [ "$DESKTOP" != none ]; then
         cat <<EOF
 
     KDE Plasma: the login screen (SDDM) does not allow root. Before your first
-    graphical login, press Ctrl+Alt+F2, log in as root, and create your user:
-      useradd -m -G audio,video,input,users yourname
-      passwd yourname
-    Then press Ctrl+Alt+F7 (or reboot) and choose "Plasma (Wayland)".
+    graphical login, press Ctrl+Alt+F2, log in as root and run lfs-setup to add
+    a user (Users > Add a user). Then press Ctrl+Alt+F7 (or reboot) and log in.
     In QEMU, add a display for the desktop:  -device virtio-vga -display gtk
 EOF
     fi
 }
 
 # ---- Main -----------------------------------------------------------------------------
-NEEDS_DISK=" sources layout cross temptools chroot system config boot extras desktop "
+NEEDS_DISK=" sources layout cross temptools chroot system config boot extras desktop setup "
 
 for phase in "${PHASES[@]}"; do
     if [ "$phase" = preflight ]; then
