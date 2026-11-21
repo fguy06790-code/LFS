@@ -170,7 +170,8 @@ class BookParser(html.parser.HTMLParser):
             m = re.search(r"\b([0-9a-f]{32})\b", text)
             if m:
                 s.md5 = m.group(1)
-        elif links and re.match(r"(Required|Recommended) (patch|download)", text):
+        # Optional patches too: the commands apply them (e.g. glib-skip_warnings).
+        elif links and re.match(r"(Required|Recommended) (patch|download)|Optional patch", text):
             for u in links:
                 if (text.split(":")[0], u) not in s.extra:
                     s.extra.append((text.split(":")[0], u))

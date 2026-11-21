@@ -598,7 +598,7 @@ declare -A BLFS_ALT_URL=(
 
 blfs_fetch() {
     log "Downloading BLFS sources (on the host; the chroot has no network tools)"
-    local B=$LFS$BLFS_IN num id url md5 title cache name
+    local B=$LFS$BLFS_IN num id url md5 title cache name xurl
     # Our wget wrapper (timeouts, IPv4, GNU mirrors) also serves the book's
     # own download commands in the .fetch scripts.
     mkdir -p "$WORK/bin"
@@ -606,9 +606,20 @@ blfs_fetch() {
     local OLD_PATH=$PATH
     PATH=$WORK/bin:$PATH
     while IFS=$'\t' read -r num id url md5 title; do
-        is_done "blfs-fetch-$id" && continue
         cache=$B/cache/$id
         mkdir -p "$cache"
+        # Patches are checked every run (cheap), so a planner change that adds
+        # one reaches sections whose downloads were already done.
+        if [ -f "$WORK/blfs-plan/$num-$id.extra" ]; then
+            while read -r xurl; do
+                [ -n "$xurl" ] || continue
+                # Links to a directory listing (e.g. Mesa's demos/) aren't files to fetch.
+                case $xurl in */) continue ;; esac
+                [ -s "$cache/${xurl##*/}" ] && continue
+                wget --continue --no-verbose -O "$cache/${xurl##*/}" "$xurl" || die "could not download $xurl (section $id)"
+            done < "$WORK/blfs-plan/$num-$id.extra"
+        fi
+        is_done "blfs-fetch-$id" && continue
         if [ "$url" != "-" ]; then
             name=${url##*/}
             wget --continue --no-verbose --tries=3 -O "$cache/$name" "$url" 2>&1 | grep -iE 'error|failed' | sed 's/^/    /' || true
@@ -625,14 +636,6 @@ blfs_fetch() {
             if [ "$md5" != "-" ]; then
                 echo "$md5  $cache/$name" | md5sum -c --quiet || die "MD5 mismatch for $name (section $id)"
             fi
-        fi
-        if [ -f "$WORK/blfs-plan/$num-$id.extra" ]; then
-            while read -r url; do
-                [ -n "$url" ] || continue
-                # Links to a directory listing (e.g. Mesa's demos/) aren't files to fetch.
-                case $url in */) continue ;; esac
-                wget --continue --no-verbose -O "$cache/${url##*/}" "$url" || die "could not download $url (section $id)"
-            done < "$WORK/blfs-plan/$num-$id.extra"
         fi
         if [ -f "$WORK/blfs-plan/$num-$id.fetch" ]; then
             # Bulk pages (Xorg, KF6, Plasma): run the book's own download commands.
