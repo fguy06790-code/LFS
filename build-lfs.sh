@@ -277,6 +277,8 @@ compose_build_dir() {
         # grep that finds nothing returns 1 (e.g. glibc's "grep Timed out $(find ...)").
         if [ "$KEEP_TESTS" != 1 ]; then
             sed -i -E '/^grep .*\$\(find -name /d; /check-log\b/d' "$dst"
+            # Test runners that share a block with "make install" (util-linux).
+            sed -i -E '/^bash tests\/run\.sh /d' "$dst"
         fi
         # Example commands in the book's notes end in a literal "..." (like GMP's
         # "ABI=32 ./configure ..." for 32-bit hosts); they are not meant to run.
