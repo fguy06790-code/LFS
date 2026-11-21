@@ -5,6 +5,8 @@
 #   - disk, network, and console drivers for QEMU/KVM and Hyper-V, built in so
 #     no initramfs is needed
 #   - BINFMT_MISC, so the kernel can hand .exe files to pe-loader
+#   - squashfs, overlayfs, CD-ROM and USB storage for the live ISO
+#     (tools/make-iso.sh), plus NVMe and Realtek Ethernet for real PCs
 . /sources/lfs-build/config.env
 
 make mrproper
@@ -22,7 +24,10 @@ scripts/config \
     -e HYPERVISOR_GUEST -e HYPERV -e HYPERV_STORAGE -e HYPERV_NET \
     -e HYPERV_KEYBOARD -e HID_HYPERV_MOUSE \
     -e SERIAL_8250 -e SERIAL_8250_CONSOLE \
-    -e IKCONFIG -e IKCONFIG_PROC
+    -e IKCONFIG -e IKCONFIG_PROC \
+    -e SQUASHFS -e SQUASHFS_ZSTD -e SQUASHFS_XZ -e OVERLAY_FS \
+    -e ISO9660_FS -e JOLIET -e BLK_DEV_SR -e USB_STORAGE -e USB_UAS \
+    -e BLK_DEV_NVME -e R8169
 
 # Desktop (KDE Plasma): VM graphics, input, sound, and what elogind,
 # PipeWire, and Flatpak-style sandboxes (bubblewrap) expect from the kernel.
