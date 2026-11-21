@@ -536,6 +536,13 @@ phase_extras() {
 # ---- Desktop: KDE Plasma from BLFS ------------------------------------------------------
 BLFS_IN=/sources/blfs                 # seen from the chroot
 
+# Remove whole command blocks (blank-line separated) that match a regex.
+drop_blocks() {
+    local file=$1 pat=$2
+    awk -v pat="$pat" 'BEGIN { RS = ""; ORS = "\n\n" } $0 !~ pat' "$file" > "$file.new"
+    mv "$file.new" "$file"
+}
+
 blfs_plan() {
     log "Planning the KDE Plasma build from the BLFS $LFS_VERSION book"
     [ -s "$WORK/book/blfs.html" ] || {
@@ -559,6 +566,16 @@ blfs_plan() {
     done
     f=$(ls "$WORK/blfs-plan"/[0-9][0-9][0-9]-sddm.sh)
     sed -i '/ServerPath.*opt\/xorg/d' "$f"     # the book assumes Xorg in /opt/xorg
+    # make-ca: adding the CAcert roots and distrusting "Makebelieve CA" are
+    # examples, and there is no cron for a weekly update job.
+    f=$(ls "$WORK/blfs-plan"/[0-9][0-9][0-9]-make-ca.sh 2>/dev/null | head -1)
+    if [ -n "$f" ]; then
+        drop_blocks "$f" 'cacert[.]org|Makebelieve|cron[.]weekly'
+        rm -f "${f%.sh}.fetch"
+    fi
+    # Xwayland: preparing the piglit/xts test suites needs git and a display.
+    f=$(ls "$WORK/blfs-plan"/[0-9][0-9][0-9]-xwayland.sh 2>/dev/null | head -1)
+    [ -z "$f" ] || drop_blocks "$f" 'pushd tools|piglit|xts'
 
     local B=$LFS$BLFS_IN
     mkdir -p "$B/cache"
