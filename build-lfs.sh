@@ -577,6 +577,11 @@ blfs_plan() {
     # Xwayland: preparing the piglit/xts test suites needs git and a display.
     f=$(ls "$WORK/blfs-plan"/[0-9][0-9][0-9]-xwayland.sh 2>/dev/null | head -1)
     [ -z "$f" ] || drop_blocks "$f" 'pushd tools|piglit|xts'
+    # Unpacking prebuilt documentation (e.g. Linux-PAM-*-docs.tar.xz) needs an
+    # optional download we don't fetch.
+    for f in "$WORK/blfs-plan"/[0-9][0-9][0-9]-*.sh; do
+        grep -qE 'tar .*-docs[.]tar' "$f" && drop_blocks "$f" 'tar [^\n]*-docs[.]tar'
+    done
 
     local B=$LFS$BLFS_IN
     mkdir -p "$B/cache"
