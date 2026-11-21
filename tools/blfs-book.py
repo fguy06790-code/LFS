@@ -176,6 +176,15 @@ class BookParser(html.parser.HTMLParser):
                     s.extra.append((text.split(":")[0], u))
 
 
+# Pairs the book lists as depending on each other, where the second one is
+# really built *after* the first: Shadow is reinstalled with PAM support once
+# Linux-PAM exists, and Phonon's VLC backend needs Phonon itself.
+POST_DEPS = {
+    "linux-pam": ["shadow"],
+    "phonon": ["phonon-backend-vlc"],
+}
+
+
 def plan(sections, targets, extra_ids):
     """Depth-first, dependencies first. Cycles are broken where they're found."""
     out, state = [], {}
@@ -187,10 +196,14 @@ def plan(sections, targets, extra_ids):
             print(f"note: dependency cycle broken at {' -> '.join(path + [sid])}", file=sys.stderr)
             return
         state[sid] = "active"
+        post = POST_DEPS.get(sid, [])
         for dep in sections[sid].deps["required"]:
-            visit(dep, path + [sid])
+            if dep not in post:
+                visit(dep, path + [sid])
         state[sid] = "done"
         out.append(sid)
+        for dep in post:
+            visit(dep, [])
 
     for t in list(extra_ids) + list(targets):
         if t not in sections:

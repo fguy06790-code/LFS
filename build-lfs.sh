@@ -601,7 +601,7 @@ blfs_fetch() {
     local OLD_PATH=$PATH
     PATH=$WORK/bin:$PATH
     while IFS=$'\t' read -r num id url md5 title; do
-        is_done "blfs-fetch-$num" && continue
+        is_done "blfs-fetch-$id" && continue
         cache=$B/cache/$id
         mkdir -p "$cache"
         if [ "$url" != "-" ]; then
@@ -638,7 +638,7 @@ blfs_fetch() {
                 || { tail -20 "$WORK/logs/blfs-fetch-$id.log"; die "download steps for $id failed"; }
             find "$dl" -type f -exec cp -f {} "$cache/" \;
         fi
-        mark_done "blfs-fetch-$num"
+        mark_done "blfs-fetch-$id"
     done < "$WORK/blfs-plan/plan.tsv"
     PATH=$OLD_PATH
 
@@ -675,7 +675,7 @@ phase_desktop() {
     log "Building KDE Plasma ($(wc -l < "$WORK/blfs-plan/plan.tsv") BLFS sections)"
     local num id url md5 title logf t0
     while IFS=$'\t' read -r num id url md5 title; do
-        is_done "blfs-$num" && continue
+        is_done "blfs-$id" && continue
         logf=$WORK/logs/blfs-$num-$id.log
         printf '    [%s] %-55s ' "$num" "$title"
         t0=$(date +%s)
@@ -686,7 +686,7 @@ phase_desktop() {
             die "BLFS section $num ($title) failed. Full log: $logf. Fix the cause and rerun to continue from here."
         fi
         printf '%5ss\n' "$(( $(date +%s) - t0 ))"
-        mark_done "blfs-$num"
+        mark_done "blfs-$id"
     done < "$WORK/blfs-plan/plan.tsv"
     umount "$LFS/etc/resolv.conf"
 }
