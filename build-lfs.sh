@@ -107,7 +107,7 @@ VERBOSE=${VERBOSE:-0}
 # BLFS desktop build: the targets, plus recommended packages a usable desktop
 # needs (LLVM gives Mesa its software renderer for VMs without a real GPU).
 BLFS_TARGETS=${BLFS_TARGETS:-"plasma-build sddm"}
-BLFS_WITH=${BLFS_WITH:-postlfs-config-profile,make-ca,linux-pam,elogind,polkit,llvm,libinput,breeze-icons,xwayland}
+BLFS_WITH=${BLFS_WITH:-postlfs-config-profile,make-ca,linux-pam,elogind,polkit,llvm,libinput,breeze-icons,xwayland,dhcpcd,sudo,konsole}
 BLFS_URL=https://www.linuxfromscratch.org/blfs/downloads/$LFS_VERSION/BLFS-BOOK-$LFS_VERSION-nochunks.html.xz
 
 BOOK_BASE=https://www.linuxfromscratch.org/lfs
@@ -570,6 +570,12 @@ blfs_plan() {
 blfs_fetch() {
     log "Downloading BLFS sources (on the host; the chroot has no network tools)"
     local B=$LFS$BLFS_IN num id url md5 title cache name
+    # Our wget wrapper (timeouts, IPv4, GNU mirrors) also serves the book's
+    # own download commands in the .fetch scripts.
+    mkdir -p "$WORK/bin"
+    install -m755 "$SCRIPT_DIR/tools/wget-mirror.sh" "$WORK/bin/wget"
+    local OLD_PATH=$PATH
+    PATH=$WORK/bin:$PATH
     while IFS=$'\t' read -r num id url md5 title; do
         is_done "blfs-fetch-$num" && continue
         cache=$B/cache/$id
@@ -599,6 +605,7 @@ blfs_fetch() {
         fi
         mark_done "blfs-fetch-$num"
     done < "$WORK/blfs-plan/plan.tsv"
+    PATH=$OLD_PATH
 
     if ! is_done blfs-bootscripts; then
         local bs
