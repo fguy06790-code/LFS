@@ -247,6 +247,14 @@ edit_section() {
         ch-system-shadow)
             sed -i "s|^passwd root\$|chpasswd -e < $IN_IMAGE_BUILD/.rootpw \&\& rm -f $IN_IMAGE_BUILD/.rootpw|" "$f"
             grep -q chpasswd "$f" || die "could not replace 'passwd root' in $f" ;;
+        ch-system-stripping)
+            # The book: strip reports many files as "file format not recognized"
+            # (scripts, linker scripts like libgcc_s.so); those are harmless.
+            sed -i -E 's|^([[:space:]]*\* \) strip --strip-debug \$i)$|\1 \|\| true|' "$f"
+            grep -q 'strip --strip-debug \$i || true' "$f" \
+                || die "could not make the final strip loop tolerant in $f"
+            # On a rerun the libraries are already stripped; keep the first .dbg files.
+            sed -i -E 's|^([[:space:]]*)(objcopy --only-keep-debug .* \$LIB \$LIB\.dbg)$|\1[ -e $LIB.dbg ] \|\| \2|' "$f" ;;
     esac
 }
 
