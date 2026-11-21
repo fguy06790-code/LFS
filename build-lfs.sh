@@ -609,6 +609,8 @@ blfs_fetch() {
         if [ -f "$WORK/blfs-plan/$num-$id.extra" ]; then
             while read -r url; do
                 [ -n "$url" ] || continue
+                # Links to a directory listing (e.g. Mesa's demos/) aren't files to fetch.
+                case $url in */) continue ;; esac
                 wget --continue --no-verbose -O "$cache/${url##*/}" "$url" || die "could not download $url (section $id)"
             done < "$WORK/blfs-plan/$num-$id.extra"
         fi
