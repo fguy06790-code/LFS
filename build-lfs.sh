@@ -585,6 +585,12 @@ blfs_plan() {
     cp "$SCRIPT_DIR/tools/run-blfs-section.sh" "$SCRIPT_DIR/stages/desktop-env.sh" "$B/"
 }
 
+# The same source code from another host, for book links that keep failing
+# (git.openldap.org rate-limits with "429 Too Many Requests").
+declare -A BLFS_ALT_URL=(
+    [lmdb]=https://github.com/LMDB/lmdb/archive/refs/tags/LMDB_0.9.33.tar.gz
+)
+
 blfs_fetch() {
     log "Downloading BLFS sources (on the host; the chroot has no network tools)"
     local B=$LFS$BLFS_IN num id url md5 title cache name
@@ -601,6 +607,15 @@ blfs_fetch() {
         if [ "$url" != "-" ]; then
             name=${url##*/}
             wget --continue --no-verbose --tries=3 -O "$cache/$name" "$url" 2>&1 | grep -iE 'error|failed' | sed 's/^/    /' || true
+            local alt=${BLFS_ALT_URL[$id]:-}
+            if [ ! -s "$cache/$name" ] && [ -n "$alt" ]; then
+                info "the book's link failed; using the same source from $alt"
+                rm -f "$cache/$name"
+                wget --no-verbose --tries=3 -O "$cache/$name" "$alt" 2>&1 | grep -iE 'error|failed' | sed 's/^/    /' || true
+                # Different packaging, so the book's MD5 can't match: check it unpacks.
+                tar -tf "$cache/$name" >/dev/null 2>&1 || { rm -f "$cache/$name"; die "$alt is not a valid archive"; }
+                md5=-
+            fi
             [ -s "$cache/$name" ] || die "could not download $url (section $id)"
             if [ "$md5" != "-" ]; then
                 echo "$md5  $cache/$name" | md5sum -c --quiet || die "MD5 mismatch for $name (section $id)"
