@@ -281,6 +281,8 @@ compose_build_dir() {
         # Example commands in the book's notes end in a literal "..." (like GMP's
         # "ABI=32 ./configure ..." for 32-bit hosts); they are not meant to run.
         sed -i -E '/^[^#].* \.\.\.[[:space:]]*$/d' "$dst"
+        # Interactive demos (Vim's "vim -c ':options'") need a terminal and a person.
+        sed -i -E '/^vim -c /d' "$dst"
     done < "$WORK/cmds/manifest.tsv"
 
     {
