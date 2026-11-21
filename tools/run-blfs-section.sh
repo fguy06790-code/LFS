@@ -12,6 +12,18 @@ set +h
 umask 022
 : "${BLFS_DIR:?BLFS_DIR not set}"
 
+# BLFS keeps its settings in /etc/profile and /etc/profile.d
+# (XORG_PREFIX, KF6_PREFIX, QT6DIR, PKG_CONFIG_PATH, ...). Those scripts are
+# not written for "set -e", so load them with it off. Load them before setting
+# any variables here: BLFS's /etc/profile does "for script in ...; unset script".
+keep_makeflags=$MAKEFLAGS
+keep_blfs_dir=$BLFS_DIR
+set +e
+# shellcheck source=/dev/null
+source /etc/profile >/dev/null 2>&1
+set -e
+export MAKEFLAGS=$keep_makeflags BLFS_DIR=$keep_blfs_dir
+
 num=${1:?usage: run-blfs-section.sh NNN}
 line=$(awk -F'\t' -v n="$num" '$1 == n' "$BLFS_DIR/plan/plan.tsv")
 [ -n "$line" ] || { echo "run-blfs-section: no section $num in the plan" >&2; exit 1; }
@@ -20,16 +32,6 @@ script=$BLFS_DIR/plan/$num-$id.sh
 export BLFS_CACHE=$BLFS_DIR/cache/$id
 export BLFS_BOOTSCRIPTS=$BLFS_DIR/bootscripts
 work=$BLFS_DIR/work/$id
-
-# BLFS keeps its settings in /etc/profile and /etc/profile.d
-# (XORG_PREFIX, KF6_PREFIX, QT6DIR, PKG_CONFIG_PATH, ...). Those scripts are
-# not written for "set -e", so load them with it off.
-keep_makeflags=$MAKEFLAGS
-set +e
-# shellcheck source=/dev/null
-source /etc/profile >/dev/null 2>&1
-set -e
-export MAKEFLAGS=$keep_makeflags
 
 wget() {
     if [ -d "$BLFS_CACHE" ]; then
